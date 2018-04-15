@@ -1,0 +1,43 @@
+This was an interesting challenge, because CTFs don't typically have a large IR component to them, forensics is usually limited to file carving
+and things like that. This challenge gave us 5 files:
+
+INDEX.BTR
+MAPPING1.MAP
+MAPPING2.MAP
+MAPPING3.MAP
+OBJECTS.DATA
+
+This is WMI data from a windows system. index.btr is the binary tree index, it's a list of MOF files which are imported into objects.data
+objects.data is a collection of physical or logical objects which can be managed by WMI. 
+
+Luckily there's a few tools to parse these files, now that there's been an uptick in the use of WMI by threat actors and criminal groups. 
+FireEye has a set of python tools for parsing this repository and pulling data out
+
+github.com/fireeye/flare-wmi/python-cim
+
+Per the challenge description, we're looking for the malware which ran on the system. One of the ways wmi is used to persist and trigger on events
+is by setting event filters and consumers. Luckily, the set of fireeye tools has a script which seems like it will do the trick:
+
+show_filtertoconsumerbindings.py
+
+seamus@ubuntu:~/CTF/UMDCTF2018$ python ../tools/flare-wmi/python-cim/samples/show_filtertoconsumerbindings.py win7 ~/CTF/UMDCTF2018/
+('binding: ', \root\subscription:__FilterToConsumerBinding.InstanceKey({u'Filter': u'__EventFilter.Name="fioadjfoiq23"', u'Consumer': u'CommandLineEventConsumer.Name="fioadjfoiq23"'}))
+('  filter: ', \root\subscription:__EventFilter.{u'Name': u'fioadjfoiq23'})
+('    language: ', u'WQL')
+('    query: ', u"SELECT * FROM RegistryValueChangeEvent WHERE Hive='HKEY_LOCAL_MACHINE' AND KeyPath='SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\' AND ValueName = 'avicoamvklamdfcxz'")
+('  consumer: ', \root\subscription:CommandLineEventConsumer.{u'Name': u'fioadjfoiq23'})
+('    payload: ', u'powershell.exe -encodedCommand VU1EQ1RGLXtjb25zdW1lcnNfYW5kX2NoaWxsfQ==')
+('binding: ', \root\subscription:__FilterToConsumerBinding.InstanceKey({u'Filter': u'__EventFilter.Name="SCM Event Log Filter"', u'Consumer': u'NTEventLogEventConsumer.Name="SCM Event Log Consumer"'}))
+('  filter: ', \root\subscription:__EventFilter.{u'Name': u'SCM Event Log Filter'})
+('    language: ', u'WQL')
+('    query: ', u'select * from MSFT_SCMEventLogEvent')
+('  consumer: ', \root\subscription:NTEventLogEventConsumer.{u'Name': u'SCM Event Log Consumer'})
+
+The script takes two arguments, the profile of the system the files were ripped from, in our case, windows 7, and the location of the files. 
+It then lists all wmi filters and consumers which are bound, and we can see the first one is 'floadjfoiq23', which is slightly suspicious. 
+
+It's payload is powershell running a base4 encoded command, which when we decode, turns out to be the flag
+
+UMDCTF-{consumers_and_chill}
+
+
