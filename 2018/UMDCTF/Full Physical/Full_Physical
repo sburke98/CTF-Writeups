@@ -1,0 +1,73 @@
+For this challenge we were told that: "The mobile forensics lab has extracted the unencrypted userdata partition from a Samsung Galaxy S6. 
+We think the flag was sent as a text message."
+
+It's easy enough to extract the image
+
+unzip data.img.zip
+
+Then we check and see what we have
+
+seamus@CTF:~/CTF/UMDCTF2018$ file data.img
+data.img: Linux rev 1.0 ext4 filesystem data, UUID=c25d03d9-ea27-3358-873e-b911bfaab62b, volume name "data" (needs journal recovery) (extents) (large files)
+
+We see it's an ext4 filesystem, as expected, and the journal needs to be recovered. It's nice it's already an ext4 for us, so we don't have to convert
+it from an Android Sparse image. 
+
+The obvious step is to try to mount it and look for the text messages
+
+seamus@ubuntu:~/CTF/UMDCTF2018$ sudo mount -t ext4 -o loop data.img.back /mnt/userdata
+mount: wrong fs type, bad option, bad superblock on /dev/loop0,
+       missing codepage or helper program, or other error
+
+       In some cases useful info is found in syslog - try
+       dmesg | tail or so.
+
+Well, it's a CTF, some tomfoolery isn't totally unexpected. Let's see what's in the logs
+
+seamus@ubuntu:~/CTF/UMDCTF2018$ dmesg | tail
+[   48.186394] Initializing XFRM netlink socket
+[   48.360787] IPv6: ADDRCONF(NETDEV_UP): docker0: link is not ready
+[  124.909721] IPv6: ADDRCONF(NETDEV_UP): ens38: link is not ready
+[  124.913686] e1000: ens38 NIC Link is Up 1000 Mbps Full Duplex, Flow Control: None
+[  124.960449] IPv6: ADDRCONF(NETDEV_UP): ens33: link is not ready
+[  124.965466] e1000: ens33 NIC Link is Up 1000 Mbps Full Duplex, Flow Control: None
+[  168.983354] traps: pool[3187] trap int3 ip:7f99b09fca5b sp:7f998de695b0 error:0
+[  611.087317] EXT4-fs (loop0): recovery complete
+[  611.087808] EXT4-fs (loop0): mounted filesystem with ordered data mode. Opts: (null)
+[  627.560314] EXT4-fs (loop0): bad geometry: block count 140800 exceeds size of device (95408 blocks)
+
+The geometry of the disk image is apparently bad, it thinks it has more blocks than are physically present in the file. 
+
+First I tried repairing the journal with fsck
+
+ext4.fsck data.img
+
+It repairs a bunch of inodes, basically files everything in 'lost+found', but when trying to mount the img, no dice, it throws the same error. 
+
+Obviously we have to try to resolve the disk geometry. 
+
+The simple solution I found was just pad out the end of the file. 
+
+truncate -o -s 140800 data.img
+
+Then the disk mounts fine
+
+mount -o loop data.img /mnt/userdata
+
+Then it's trivial to browse through the filesystem and locate the messaging db.
+root@ubuntu:/mnt/userdata/lost+found/#14081/com.google.android.apps.messaging/databases# ls -al
+total 236
+drwxrwx--x. 2 10066 10066   4096 Mar 20 19:33 .
+drwx------. 7 10066 10066   4096 Mar 20 19:37 ..
+-rw-rw----. 1 10066 10066 155648 Mar 20 19:45 bugle_db
+-rw-------. 1 10066 10066  66176 Mar 20 19:45 bugle_db-journal
+
+bugle_db is a sqlite3 database, so we open it with sqlite3 and run the .dump command, the flag is there in the output.
+
+HZQPGS-{z0ovyr_4a6}
+
+This is simple ROT13 to prevent the flag from being grepped for, rotating it leaves:
+
+UMDCTF-{m0bile_4n6}
+
+
